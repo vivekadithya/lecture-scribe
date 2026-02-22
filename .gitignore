@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+
+# Models (downloaded at runtime, too large for git)
+native-host/models/*.onnx
+native-host/models/*.bin
+!native-host/models/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Installer build artifacts
+installer/build/
+installer/dist/
+installer/*.spec
+
+# Logs
+*.log
+
+# Config (contains user-specific paths)
+config.json

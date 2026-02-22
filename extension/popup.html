@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LectureScribe</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <!-- Setup Required Banner -->
+    <div id="setup-banner" class="setup-banner hidden">
+        <div class="setup-icon">⚠️</div>
+        <p>Companion app not detected</p>
+        <a href="https://github.com/user/lecture-scribe/releases" target="_blank" class="btn btn-sm">Install Now</a>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="logo-row">
+            <div class="logo">
+                <span class="logo-icon">📝</span>
+                <h1>LectureScribe</h1>
+            </div>
+            <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+        </div>
+        <div id="status-bar" class="status-bar status-idle">
+            <span class="status-dot"></span>
+            <span id="status-text">Idle</span>
+        </div>
+    </header>
+
+    <!-- Main Controls -->
+    <main class="main">
+        <!-- Session Info -->
+        <div id="session-info" class="session-info hidden">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Duration</span>
+                    <span id="duration" class="info-value">00:00:00</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Words</span>
+                    <span id="word-count" class="info-value">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Silence</span>
+                    <span id="silence-counter" class="info-value">0:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Start/Stop Button -->
+        <div class="control-row">
+            <button id="start-btn" class="btn btn-primary btn-large">
+                <span class="btn-icon">🎙️</span>
+                Start Transcribing
+            </button>
+            <button id="stop-btn" class="btn btn-danger btn-large hidden">
+                <span class="btn-icon">⏹️</span>
+                Stop
+            </button>
+        </div>
+
+        <!-- Live Transcript Preview -->
+        <div id="transcript-container" class="transcript-container hidden">
+            <div class="transcript-header">
+                <h2>Live Transcript</h2>
+                <button id="copy-btn" class="btn btn-sm" title="Copy transcript to clipboard">📋 Copy</button>
+            </div>
+            <div id="transcript-body" class="transcript-body">
+                <p class="placeholder-text">Waiting for audio...</p>
+            </div>
+        </div>
+
+        <!-- No Video Warning -->
+        <div id="no-video-msg" class="info-message hidden">
+            <span>💡</span>
+            <p>Navigate to a page with a video or audio to begin transcribing.</p>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <span class="footer-text">Transcripts saved to ~/LectureScribe/</span>
+    </footer>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
