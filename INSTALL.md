@@ -59,7 +59,7 @@ You should see all green checkmarks ✓. The installer:
 
 5. The LectureScribe icon (📝) should appear in your browser toolbar
 
-### Step 4: Lock the Extension ID (Optional but Recommended)
+### Step 4: Register your Extension ID (**required for Brave**, optional for Chrome)
 
 After loading, your browser assigns an extension ID (shown on the extensions page — a long string like `abcdefghijklmnop...`). Copy it and re-run:
 
@@ -67,7 +67,7 @@ After loading, your browser assigns an extension ID (shown on the extensions pag
 ./installer/install.sh <paste-your-extension-id>
 ```
 
-This restricts the native host to only accept connections from your extension.
+> ⚠️ **Brave Browser users:** This step is **mandatory**. Brave rejects wildcard extension IDs and the native host won't connect without it. Chrome users can skip this but it's recommended for security.
 
 ---
 
