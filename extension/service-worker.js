@@ -117,7 +117,18 @@ async function startSession(tabId) {
       status: 'listening'
     };
 
-    // 5. Sync current settings to native host BEFORE starting session
+    // 5. Small delay to let native host Python interpreter start
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 6. Check if native port is still alive after delay
+    if (!nativePort) {
+      session.active = false;
+      session.status = 'error';
+      updateStoredSession();
+      return { success: false, error: 'Native host disconnected during startup. Check installation.' };
+    }
+
+    // 7. Sync current settings to native host BEFORE starting session
     if (settings) {
       sendNativeMessage({
         type: 'CONFIGURE',
@@ -132,13 +143,13 @@ async function startSession(tabId) {
       });
     }
 
-    // 6. Tell native host to start a new session
+    // 8. Tell native host to start a new session
     sendNativeMessage({
       type: 'START_SESSION',
       sessionId: session.sessionId
     });
 
-    // 6. Tell offscreen document to start capturing audio
+    // 9. Tell offscreen document to start capturing audio
     chrome.runtime.sendMessage({
       type: 'START_CAPTURE',
       target: 'offscreen',
@@ -146,15 +157,17 @@ async function startSession(tabId) {
       tabId
     });
 
-    // 7. Update badge
+    // 10. Update badge
     chrome.action.setBadgeText({ text: '🔴', tabId });
     chrome.action.setBadgeBackgroundColor({ color: '#F44336', tabId });
 
     updateStoredSession();
     return { success: true, sessionId: session.sessionId };
   } catch (err) {
+    session.active = false;
     session.status = 'error';
     console.error('[LectureScribe] Start session failed:', err);
+    updateStoredSession();
     return { success: false, error: err.message };
   }
 }
@@ -231,12 +244,15 @@ function connectNativeHost() {
 
     nativePort.onDisconnect.addListener(() => {
       const error = chrome.runtime.lastError;
-      console.error('[LectureScribe] Native host disconnected:', error?.message);
+      const errorMsg = error?.message || 'Unknown error';
+      console.error('[LectureScribe] Native host disconnected:', errorMsg);
       nativePort = null;
 
       if (session.active) {
         session.status = 'error';
         session.active = false;
+        // Store the error so popup can display it
+        session.lastError = `Native host disconnected: ${errorMsg}`;
         updateStoredSession();
       }
     });
