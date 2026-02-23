@@ -20,6 +20,8 @@ const copyBtn = document.getElementById('copy-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const setupBanner = document.getElementById('setup-banner');
 const noVideoMsg = document.getElementById('no-video-msg');
+const generateSection = document.getElementById('generate-section');
+const generateBtn = document.getElementById('generate-btn');
 
 let pollInterval = null;
 let durationInterval = null;
@@ -114,6 +116,16 @@ settingsBtn.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
 });
 
+generateBtn.addEventListener('click', () => {
+    // Open generate page in a new tab with current session ID
+    chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (state) => {
+        const sessionId = state?.sessionId || '';
+        chrome.tabs.create({
+            url: chrome.runtime.getURL(`generate.html?session=${sessionId}`)
+        });
+    });
+});
+
 // ─── State Management ──────────────────────────────────────────
 
 async function refreshState() {
@@ -148,7 +160,11 @@ function updateUI(state) {
     stopBtn.classList.toggle('hidden', !isActive);
     sessionInfo.classList.toggle('hidden', !isActive && state.status !== 'auto-stopped');
     transcriptContainer.classList.toggle('hidden', !state.transcript || state.transcript.length === 0);
-    noVideoMsg.classList.add('hidden'); // Hidden for now
+    noVideoMsg.classList.add('hidden');
+
+    // Show generate button when session has transcript and is not active
+    const hasTranscript = state.transcript && state.transcript.length > 0;
+    generateSection.classList.toggle('hidden', isActive || !hasTranscript);
 
     // Update session info
     if (isActive || state.status === 'auto-stopped') {

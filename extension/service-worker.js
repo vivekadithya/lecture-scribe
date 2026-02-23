@@ -58,6 +58,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'UPDATE_SETTINGS':
       syncSettingsToNativeHost(message.settings);
       break;
+    case 'GENERATE_STUDY_MATERIALS':
+      handleGenerateRequest(message).then(r => sendResponse(r));
+      return true;
+    case 'EXPORT_TO_NOTION':
+      handleNotionExportRequest(message).then(r => sendResponse(r));
+      return true;
+    case 'PICK_FOLDER':
+      handlePickFolder().then(r => sendResponse(r));
+      return true;
     default:
       break;
   }
@@ -287,8 +296,16 @@ function handleNativeMessage(message) {
     case 'SESSION_COMPLETE':
       handleSessionComplete(message);
       break;
+    case 'GENERATION_COMPLETE':
+    case 'GENERATION_PROGRESS':
+    case 'NOTION_EXPORT_COMPLETE':
+      // Forward to all extension pages (generate page listens for these)
+      chrome.runtime.sendMessage(message).catch(() => { });
+      break;
     case 'ERROR':
       console.error('[LectureScribe] Native host error:', message.error);
+      // Forward errors to generate page too
+      chrome.runtime.sendMessage(message).catch(() => { });
       session.status = 'error';
       updateStoredSession();
       break;
@@ -407,9 +424,112 @@ function syncSettingsToNativeHost(settings) {
       outputFormat: settings.outputFormat || 'timestamped',
       outputDir: settings.outputDir || '~/LectureScribe',
       gdriveDir: settings.gdriveDir || '',
-      groqApiKey: settings.groqApiKey || ''
+      groqApiKey: settings.groqApiKey || '',
+      geminiApiKey: settings.geminiApiKey || '',
+      geminiModel: settings.geminiModel || 'gemini-2.5-flash',
+      notionApiKey: settings.notionApiKey || '',
+      notionPageId: settings.notionPageId || '',
+      defaultFeatures: settings.defaultFeatures || ['summary', 'flashcards', 'quiz'],
+      customPrompts: settings.customPrompts || {}
     }
   });
+}
+
+// ─── AI Generation ─────────────────────────────────────────────
+
+async function handleGenerateRequest(message) {
+  try {
+    // Ensure native host is connected
+    if (!nativePort) {
+      if (!connectNativeHost()) {
+        return { error: 'Failed to connect to companion app. Is it installed?' };
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Read transcript from session storage if not provided
+    let transcript = '';
+    if (session.transcript.length > 0) {
+      transcript = session.transcript
+        .map(line => `[${line.timestamp}] ${line.text}`)
+        .join('\n');
+    }
+
+    // Get API key from settings
+    const { settings } = await chrome.storage.local.get('settings');
+
+    sendNativeMessage({
+      type: 'GENERATE',
+      sessionId: message.sessionId || session.sessionId,
+      features: message.features || ['summary', 'flashcards', 'quiz'],
+      customPrompts: message.customPrompts || {},
+      transcript,
+      geminiApiKey: settings?.geminiApiKey || '',
+      geminiModel: settings?.geminiModel || 'gemini-2.5-flash'
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error('[LectureScribe] Generate request failed:', err);
+    return { error: err.message };
+  }
+}
+
+async function handleNotionExportRequest(message) {
+  try {
+    if (!nativePort) {
+      return { error: 'Native host not connected' };
+    }
+
+    const { settings } = await chrome.storage.local.get('settings');
+
+    sendNativeMessage({
+      type: 'NOTION_EXPORT',
+      sessionId: message.sessionId,
+      results: message.results,
+      notionApiKey: settings?.notionApiKey || '',
+      notionPageId: settings?.notionPageId || ''
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error('[LectureScribe] Notion export request failed:', err);
+    return { error: err.message };
+  }
+}
+
+async function handlePickFolder() {
+  try {
+    if (!nativePort) {
+      connectNativeHost();
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!nativePort) {
+      return { error: 'Native host not connected' };
+    }
+
+    return new Promise((resolve) => {
+      const listener = (message) => {
+        if (message.type === 'FOLDER_PICKED') {
+          nativePort.onMessage.removeListener(listener);
+          resolve({ path: message.path });
+        } else if (message.type === 'FOLDER_CANCELLED') {
+          nativePort.onMessage.removeListener(listener);
+          resolve({ error: 'cancelled' });
+        }
+      };
+      nativePort.onMessage.addListener(listener);
+      sendNativeMessage({ type: 'PICK_FOLDER' });
+
+      // Timeout after 60 seconds (user may take time in dialog)
+      setTimeout(() => {
+        nativePort.onMessage.removeListener(listener);
+        resolve({ error: 'timeout' });
+      }, 60000);
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 // ─── Extension Install / Update ────────────────────────────────
@@ -422,7 +542,12 @@ chrome.runtime.onInstalled.addListener((details) => {
         silenceThreshold: 600,
         outputFormat: 'timestamped',
         outputDir: '~/LectureScribe',
-        groqApiKey: ''
+        groqApiKey: '',
+        geminiApiKey: '',
+        notionApiKey: '',
+        notionPageId: '',
+        defaultFeatures: ['summary', 'flashcards', 'quiz'],
+        customPrompts: {}
       },
       session: {
         active: false,

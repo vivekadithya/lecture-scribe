@@ -85,6 +85,12 @@ class NativeMessagingHost:
                 self.handle_get_status(message)
             elif msg_type == 'CONFIGURE':
                 self.handle_configure(message)
+            elif msg_type == 'GENERATE':
+                self.handle_generate(message)
+            elif msg_type == 'NOTION_EXPORT':
+                self.handle_notion_export(message)
+            elif msg_type == 'PICK_FOLDER':
+                self.handle_pick_folder(message)
             else:
                 logger.warning(f'Unknown message type: {msg_type}')
         except Exception as e:
@@ -251,6 +257,18 @@ class NativeMessagingHost:
             self.config.output_format = settings['outputFormat']
         if 'gdriveDir' in settings:
             self.config.gdrive_dir = settings['gdriveDir'] or None
+        if 'geminiApiKey' in settings:
+            self.config.gemini_api_key = settings['geminiApiKey']
+        if 'notionApiKey' in settings:
+            self.config.notion_api_key = settings['notionApiKey']
+        if 'notionPageId' in settings:
+            self.config.notion_page_id = settings['notionPageId']
+        if 'geminiModel' in settings:
+            self.config.gemini_model = settings['geminiModel']
+        if 'defaultFeatures' in settings:
+            self.config.default_features = settings['defaultFeatures']
+        if 'customPrompts' in settings:
+            self.config.custom_prompts = settings['customPrompts']
 
         self.config.save()
 
@@ -258,6 +276,218 @@ class NativeMessagingHost:
             'type': 'STATUS',
             'status': 'configured'
         })
+
+    def handle_pick_folder(self, message):
+        """Open macOS native folder picker dialog."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['osascript', '-e', 'POSIX path of (choose folder with prompt "Select output directory")'],
+                capture_output=True, text=True, timeout=120
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                path = result.stdout.strip().rstrip('/')
+                logger.info(f'Folder picked: {path}')
+                self.send_message({'type': 'FOLDER_PICKED', 'path': path})
+            else:
+                logger.info('Folder picker cancelled')
+                self.send_message({'type': 'FOLDER_CANCELLED'})
+        except subprocess.TimeoutExpired:
+            self.send_message({'type': 'FOLDER_CANCELLED'})
+        except Exception as e:
+            logger.error(f'Folder picker error: {e}')
+            self.send_message({'type': 'FOLDER_CANCELLED'})
+
+    def handle_generate(self, message):
+        """Generate study materials from a transcript using Gemini AI."""
+        session_id = message.get('sessionId', '')
+        features = message.get('features', self.config.default_features)
+        custom_prompts = message.get('customPrompts', {})
+        transcript_text = message.get('transcript', '')
+
+        logger.info(f'Generating study materials for {session_id}: {features}')
+
+        # If no transcript provided, try to read from session file
+        if not transcript_text and session_id:
+            transcript_path = self.config.output_dir / session_id / 'transcript.md'
+            if transcript_path.exists():
+                transcript_text = transcript_path.read_text(encoding='utf-8')
+                logger.info(f'Read transcript from {transcript_path} ({len(transcript_text)} chars)')
+
+        if not transcript_text:
+            self.send_message({
+                'type': 'ERROR',
+                'error': 'No transcript available for generation',
+                'messageType': 'GENERATE'
+            })
+            return
+
+        # Check for Gemini API key
+        api_key = message.get('geminiApiKey', '') or self.config.gemini_api_key
+        if not api_key:
+            self.send_message({
+                'type': 'ERROR',
+                'error': 'Gemini API key not configured. Add it in Settings.',
+                'messageType': 'GENERATE'
+            })
+            return
+
+        # Send progress update
+        self.send_message({
+            'type': 'GENERATION_PROGRESS',
+            'status': 'starting',
+            'features': features
+        })
+
+        try:
+            from ai_generator import AIGenerator
+
+            generator = AIGenerator(
+                api_key=api_key,
+                model_name=message.get('geminiModel', '') or self.config.gemini_model,
+                custom_prompts={**self.config.custom_prompts, **custom_prompts}
+            )
+
+            results = generator.generate(transcript_text, features, custom_prompts)
+
+            # Save results to session directory
+            session_dir = self.config.output_dir / session_id
+            session_dir.mkdir(parents=True, exist_ok=True)
+            saved_files = generator.save_results(results, str(session_dir))
+
+            # ─── Extract lecture name and rename folder ─────────────
+            lecture_name = self._extract_lecture_name(results, session_id)
+            new_session_id = session_id  # default to original
+
+            if lecture_name:
+                slug = self._slugify(lecture_name)
+                new_dir = self.config.output_dir / slug
+
+                # Avoid collisions
+                if new_dir.exists() and new_dir != session_dir:
+                    slug = f'{slug}-{session_id[:10]}'
+                    new_dir = self.config.output_dir / slug
+
+                if not new_dir.exists():
+                    try:
+                        session_dir.rename(new_dir)
+                        new_session_id = slug
+                        session_dir = new_dir
+                        logger.info(f'Renamed session folder to: {slug}')
+                    except OSError as rename_err:
+                        logger.warning(f'Could not rename folder: {rename_err}')
+
+            # Save metadata
+            import json as json_mod
+            metadata = {
+                'original_session_id': session_id,
+                'lecture_name': lecture_name or session_id,
+                'slug': new_session_id,
+                'recorded_at': session_id,
+                'word_count': len(transcript_text.split()),
+                'features_generated': list(results.keys())
+            }
+            with open(session_dir / 'metadata.json', 'w') as f:
+                json_mod.dump(metadata, f, indent=2)
+
+            logger.info(f'Generation complete for {new_session_id}: {list(results.keys())}')
+
+            self.send_message({
+                'type': 'GENERATION_COMPLETE',
+                'sessionId': new_session_id,
+                'lectureName': lecture_name or session_id,
+                'results': results,
+                'savedFiles': saved_files
+            })
+
+        except Exception as e:
+            logger.exception(f'Generation failed for {session_id}')
+            self.send_message({
+                'type': 'ERROR',
+                'error': str(e),
+                'messageType': 'GENERATE'
+            })
+
+    def handle_notion_export(self, message):
+        """Export generated study materials to Notion."""
+        session_id = message.get('sessionId', '')
+        results = message.get('results', {})
+
+        logger.info(f'Exporting to Notion for {session_id}')
+
+        api_key = message.get('notionApiKey', '') or self.config.notion_api_key
+        page_id = message.get('notionPageId', '') or self.config.notion_page_id
+
+        if not api_key:
+            self.send_message({
+                'type': 'ERROR',
+                'error': 'Notion API key not configured. Add it in Settings.',
+                'messageType': 'NOTION_EXPORT'
+            })
+            return
+
+        if not page_id:
+            self.send_message({
+                'type': 'ERROR',
+                'error': 'Notion parent page ID not configured. Add it in Settings.',
+                'messageType': 'NOTION_EXPORT'
+            })
+            return
+
+        try:
+            from notion_export import NotionExporter
+
+            exporter = NotionExporter(api_key=api_key, parent_page_id=page_id)
+            exported = exporter.export(session_id, results)
+
+            logger.info(f'Notion export complete for {session_id}: {exported}')
+
+            self.send_message({
+                'type': 'NOTION_EXPORT_COMPLETE',
+                'sessionId': session_id,
+                'pages': exported
+            })
+
+        except Exception as e:
+            logger.exception(f'Notion export failed for {session_id}')
+            self.send_message({
+                'type': 'ERROR',
+                'error': str(e),
+                'messageType': 'NOTION_EXPORT'
+            })
+
+    def _extract_lecture_name(self, results, fallback):
+        """Extract a lecture name from generated results."""
+        # Try summary topics first
+        summary = results.get('summary', {})
+        if isinstance(summary, dict):
+            topics = summary.get('topics', [])
+            if topics and isinstance(topics[0], dict):
+                name = topics[0].get('topic', '')
+                if name and len(name) > 3:
+                    return name[:80]  # Cap length
+
+            # Try first key point
+            key_points = summary.get('key_points', [])
+            if key_points and isinstance(key_points[0], str):
+                point = key_points[0]
+                if len(point) > 5:
+                    # Take first sentence or first 60 chars
+                    name = point.split('.')[0][:60]
+                    return name
+
+        return None
+
+    @staticmethod
+    def _slugify(text):
+        """Convert text to a filesystem-safe slug."""
+        import re
+        slug = text.lower().strip()
+        slug = re.sub(r'[^\w\s-]', '', slug)  # Remove special chars
+        slug = re.sub(r'[\s_]+', '-', slug)     # Spaces/underscores to hyphens
+        slug = re.sub(r'-+', '-', slug)         # Collapse multiple hyphens
+        slug = slug.strip('-')
+        return slug[:80] or 'untitled'
 
     def run(self):
         """Main event loop: read messages from Chrome and process them."""

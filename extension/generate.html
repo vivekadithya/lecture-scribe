@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LectureScribe — Study Materials</title>
+    <link rel="stylesheet" href="generate.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-brand">
+                <img src="icons/icon-48.png" alt="LectureScribe" class="header-icon">
+                <div>
+                    <h1>LectureScribe</h1>
+                    <p class="subtitle" id="session-label">Study Materials</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Feature Selection -->
+        <section class="card" id="feature-selection">
+            <h2>What would you like to generate?</h2>
+            <div class="feature-toggles">
+                <label class="feature-toggle">
+                    <input type="checkbox" id="feat-summary" checked>
+                    <div class="feature-card">
+                        <span class="feature-icon">📝</span>
+                        <span class="feature-name">Summary</span>
+                        <span class="feature-desc">Action items, key points, topics</span>
+                    </div>
+                </label>
+                <label class="feature-toggle">
+                    <input type="checkbox" id="feat-flashcards" checked>
+                    <div class="feature-card">
+                        <span class="feature-icon">🃏</span>
+                        <span class="feature-name">Flashcards</span>
+                        <span class="feature-desc">Q&A pairs for active recall</span>
+                    </div>
+                </label>
+                <label class="feature-toggle">
+                    <input type="checkbox" id="feat-quiz" checked>
+                    <div class="feature-card">
+                        <span class="feature-icon">🧪</span>
+                        <span class="feature-name">Practice Quiz</span>
+                        <span class="feature-desc">MCQ, short answer, true/false</span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Prompt Customization (collapsible) -->
+            <details class="prompt-section">
+                <summary>✏️ Customize AI Prompts</summary>
+                <div class="prompt-editors">
+                    <div class="prompt-editor" id="prompt-summary-group">
+                        <label for="prompt-summary">Summary Prompt</label>
+                        <textarea id="prompt-summary" rows="4"
+                            placeholder="Leave blank for default prompt..."></textarea>
+                    </div>
+                    <div class="prompt-editor" id="prompt-flashcards-group">
+                        <label for="prompt-flashcards">Flashcards Prompt</label>
+                        <textarea id="prompt-flashcards" rows="4"
+                            placeholder="Leave blank for default prompt..."></textarea>
+                    </div>
+                    <div class="prompt-editor" id="prompt-quiz-group">
+                        <label for="prompt-quiz">Quiz Prompt</label>
+                        <textarea id="prompt-quiz" rows="4" placeholder="Leave blank for default prompt..."></textarea>
+                    </div>
+                </div>
+            </details>
+
+            <button class="btn btn-primary btn-lg" id="generate-btn">
+                <span class="btn-icon">✨</span> Generate Study Materials
+            </button>
+        </section>
+
+        <!-- Progress -->
+        <section class="card hidden" id="progress-section">
+            <div class="progress-container">
+                <div class="spinner"></div>
+                <p class="progress-text" id="progress-text">Generating with Gemini AI...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results -->
+        <section class="card hidden" id="results-section">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="summary">📝 Summary</button>
+                <button class="tab" data-tab="flashcards">🃏 Flashcards</button>
+                <button class="tab" data-tab="quiz">🧪 Quiz</button>
+            </div>
+
+            <!-- Summary Tab -->
+            <div class="tab-content active" id="tab-summary">
+                <div id="summary-content"></div>
+            </div>
+
+            <!-- Flashcards Tab -->
+            <div class="tab-content" id="tab-flashcards">
+                <div class="flashcard-controls">
+                    <button class="btn btn-sm" id="flashcard-prev">← Prev</button>
+                    <span id="flashcard-counter">1 / 10</span>
+                    <button class="btn btn-sm" id="flashcard-next">Next →</button>
+                </div>
+                <div class="flashcard" id="flashcard-display">
+                    <div class="flashcard-front" id="flashcard-front">
+                        <p class="flashcard-label">Question</p>
+                        <p id="flashcard-question"></p>
+                    </div>
+                    <div class="flashcard-back hidden" id="flashcard-back">
+                        <p class="flashcard-label">Answer</p>
+                        <p id="flashcard-answer"></p>
+                    </div>
+                    <button class="btn btn-sm" id="flashcard-flip">🔄 Flip</button>
+                </div>
+            </div>
+
+            <!-- Quiz Tab -->
+            <div class="tab-content" id="tab-quiz">
+                <div id="quiz-content"></div>
+                <div class="quiz-score hidden" id="quiz-score">
+                    <h3>Your Score</h3>
+                    <p id="score-text"></p>
+                </div>
+            </div>
+
+            <!-- Export Actions -->
+            <div class="export-bar">
+                <button class="btn btn-sm" id="copy-results-btn">📋 Copy</button>
+                <button class="btn btn-sm" id="export-notion-btn">📓 Export to Notion</button>
+                <span class="export-status" id="export-status"></span>
+            </div>
+        </section>
+
+        <!-- Error -->
+        <section class="card hidden" id="error-section">
+            <div class="error-content">
+                <span class="error-icon">⚠️</span>
+                <p id="error-message"></p>
+                <button class="btn btn-sm" id="retry-btn">🔄 Try Again</button>
+            </div>
+        </section>
+    </div>
+
+    <script src="generate.js"></script>
+</body>
+
+</html>

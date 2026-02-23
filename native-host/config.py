@@ -14,9 +14,15 @@ DEFAULT_CONFIG = {
     'model': 'base',
     'silence_threshold': 600,
     'output_dir': '~/LectureScribe',
-    'output_format': 'timestamped',  # 'timestamped' or 'raw'
+    'output_format': 'timestamped',
     'gdrive_dir': None,
-    'groq_api_key': ''
+    'groq_api_key': '',
+    'gemini_api_key': '',
+    'gemini_model': 'gemini-2.5-flash',
+    'notion_api_key': '',
+    'notion_page_id': '',
+    'default_features': ['summary', 'flashcards', 'quiz'],
+    'custom_prompts': {}
 }
 
 
@@ -112,6 +118,56 @@ class Config:
     def output_format(self, value):
         if value in ('timestamped', 'raw'):
             self._data['output_format'] = value
+
+    @property
+    def gemini_api_key(self):
+        return self._data.get('gemini_api_key', '')
+
+    @gemini_api_key.setter
+    def gemini_api_key(self, value):
+        self._data['gemini_api_key'] = value
+
+    @property
+    def gemini_model(self):
+        return self._data.get('gemini_model', DEFAULT_CONFIG['gemini_model'])
+
+    @gemini_model.setter
+    def gemini_model(self, value):
+        self._data['gemini_model'] = value
+
+    @property
+    def notion_api_key(self):
+        return self._data.get('notion_api_key', '')
+
+    @notion_api_key.setter
+    def notion_api_key(self, value):
+        self._data['notion_api_key'] = value
+
+    @property
+    def notion_page_id(self):
+        return self._data.get('notion_page_id', '')
+
+    @notion_page_id.setter
+    def notion_page_id(self, value):
+        self._data['notion_page_id'] = value
+
+    @property
+    def default_features(self):
+        return self._data.get('default_features', DEFAULT_CONFIG['default_features'])
+
+    @default_features.setter
+    def default_features(self, value):
+        valid = [f for f in value if f in ('summary', 'flashcards', 'quiz')]
+        self._data['default_features'] = valid
+
+    @property
+    def custom_prompts(self):
+        return self._data.get('custom_prompts', {})
+
+    @custom_prompts.setter
+    def custom_prompts(self, value):
+        if isinstance(value, dict):
+            self._data['custom_prompts'] = value
 
     def _detect_gdrive(self):
         """Auto-detect Google Drive for Desktop sync folder on macOS."""

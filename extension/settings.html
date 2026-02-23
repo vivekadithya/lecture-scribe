@@ -209,7 +209,14 @@
 
         <div class="field">
             <label for="output-dir">Transcript output directory</label>
-            <input type="text" id="output-dir" value="~/LectureScribe" placeholder="~/LectureScribe">
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="output-dir" value="~/LectureScribe" placeholder="~/LectureScribe"
+                    style="flex: 1;">
+                <button id="browse-dir-btn" class="btn"
+                    style="padding: 10px 14px; font-size: 12px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;">
+                    📂 Browse
+                </button>
+            </div>
             <p class="help">Timestamped Markdown files are saved here.</p>
         </div>
 
@@ -229,6 +236,53 @@
             <p class="help">For high-quality re-transcription using whisper-large-v3 (~$0.02/hour). Get a key at <a
                     href="https://console.groq.com" target="_blank" style="color: var(--accent);">console.groq.com</a>
             </p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>AI Study Materials</h2>
+
+        <div class="field">
+            <label for="gemini-key">Google Gemini API Key</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="password" id="gemini-key" placeholder="AIza..." style="flex: 1;">
+                <button id="test-gemini-btn" class="btn"
+                    style="padding: 10px 14px; font-size: 12px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;">
+                    🔌 Test
+                </button>
+            </div>
+            <p class="help" id="gemini-test-status"></p>
+            <p class="help">Free tier: 15 requests/min, 1M tokens/min. Get a key at <a
+                    href="https://aistudio.google.com/apikey" target="_blank" style="color: var(--accent);">Google AI
+                    Studio</a>
+            </p>
+        </div>
+
+        <div class="field">
+            <label for="gemini-model">Gemini Model</label>
+            <select id="gemini-model">
+                <option value="gemini-2.5-flash">Loading models...</option>
+            </select>
+            <p class="help">Models are fetched dynamically from Google. All have free tiers.</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Notion Export (Optional)</h2>
+
+        <div class="field">
+            <label for="notion-key">Notion Integration Token</label>
+            <input type="password" id="notion-key" placeholder="ntn_...">
+            <p class="help">Create an internal integration at <a href="https://www.notion.so/my-integrations"
+                    target="_blank" style="color: var(--accent);">notion.so/my-integrations</a>, then share a parent
+                page with it.</p>
+        </div>
+
+        <div class="field">
+            <label for="notion-page-id">Notion Parent Page ID</label>
+            <input type="text" id="notion-page-id" placeholder="abc123...">
+            <p class="help">The ID of the Notion page where study materials will be created as sub-pages. Find it in the
+                page URL after the workspace name.</p>
         </div>
     </div>
 
