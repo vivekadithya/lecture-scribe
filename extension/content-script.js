@@ -12,6 +12,23 @@
     let hasVideoOnPage = false;
 
     /**
+     * Safely send a message to the background script, ignoring "Extension context invalidated" errors
+     */
+    function safeSendMessage(message) {
+        try {
+            if (chrome.runtime && chrome.runtime.id) {
+                chrome.runtime.sendMessage(message, () => {
+                    if (chrome.runtime.lastError) {
+                        // Context likely invalidated, ignore
+                    }
+                });
+            }
+        } catch (e) {
+            // Context invalidated
+        }
+    }
+
+    /**
      * Attach playback event listeners to a media element
      */
     function attachMediaListeners(element) {
@@ -19,24 +36,24 @@
         DETECTED_ELEMENTS.add(element);
 
         // Notify that video exists on page
-        chrome.runtime.sendMessage({ type: 'VIDEO_DETECTED' });
+        safeSendMessage({ type: 'VIDEO_DETECTED' });
         hasVideoOnPage = true;
 
         element.addEventListener('play', () => {
-            chrome.runtime.sendMessage({ type: 'VIDEO_PLAYING' });
+            safeSendMessage({ type: 'VIDEO_PLAYING' });
         });
 
         element.addEventListener('pause', () => {
-            chrome.runtime.sendMessage({ type: 'VIDEO_STOPPED' });
+            safeSendMessage({ type: 'VIDEO_STOPPED' });
         });
 
         element.addEventListener('ended', () => {
-            chrome.runtime.sendMessage({ type: 'VIDEO_STOPPED' });
+            safeSendMessage({ type: 'VIDEO_STOPPED' });
         });
 
         // If the element is already playing, notify immediately
         if (!element.paused && !element.ended && element.readyState > 2) {
-            chrome.runtime.sendMessage({ type: 'VIDEO_PLAYING' });
+            safeSendMessage({ type: 'VIDEO_PLAYING' });
         }
     }
 

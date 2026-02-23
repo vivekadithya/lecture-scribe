@@ -2,13 +2,19 @@
  * LectureScribe — Settings Controller
  */
 
+const engineSelect = document.getElementById('engine-select');
 const modelSelect = document.getElementById('model-select');
+const groqModelSelect = document.getElementById('groq-model-select');
+const localModelField = document.getElementById('local-model-field');
+const groqModelField = document.getElementById('groq-model-field');
 const silenceSlider = document.getElementById('silence-slider');
 const silenceValue = document.getElementById('silence-value');
 const formatSelect = document.getElementById('format-select');
 const outputDir = document.getElementById('output-dir');
 const gdriveDir = document.getElementById('gdrive-dir');
 const groqKey = document.getElementById('groq-key');
+const testGroqBtn = document.getElementById('test-groq-btn');
+const groqTestStatus = document.getElementById('groq-test-status');
 const geminiKey = document.getElementById('gemini-key');
 const geminiModel = document.getElementById('gemini-model');
 const testGeminiBtn = document.getElementById('test-gemini-btn');
@@ -22,7 +28,9 @@ const saveStatus = document.getElementById('save-status');
 document.addEventListener('DOMContentLoaded', async () => {
     const { settings } = await chrome.storage.local.get('settings');
     if (settings) {
+        engineSelect.value = settings.transcriptionEngine || 'local';
         modelSelect.value = settings.model || 'base';
+        groqModelSelect.value = settings.groqModel || 'whisper-large-v3';
         silenceSlider.value = settings.silenceThreshold || 600;
         formatSelect.value = settings.outputFormat || 'timestamped';
         outputDir.value = settings.outputDir || '~/LectureScribe';
@@ -31,23 +39,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         geminiKey.value = settings.geminiApiKey || '';
         notionKey.value = settings.notionApiKey || '';
         notionPageId.value = settings.notionPageId || '';
+        // Migrate from deprecated 1.5 or 2.0 models to 2.5
+        if (settings.geminiModel === 'gemini-1.5-flash' || settings.geminiModel === 'gemini-1.5-pro' || settings.geminiModel === 'gemini-2.0-flash' || settings.geminiModel === 'gemini-2.0-flash-lite') {
+            settings.geminiModel = 'gemini-2.5-flash-lite';
+            // Save migrated setting immediately
+            chrome.storage.local.set({ settings });
+        }
+
         updateSliderLabel();
+        updateEngineFields();
     }
 
     // Populate Gemini model dropdown
-    const savedModel = settings?.geminiModel || 'gemini-2.5-flash';
+    const savedModel = settings?.geminiModel || 'gemini-2.5-flash-lite';
     await populateGeminiModels(geminiKey.value.trim(), savedModel);
 });
+
+// ─── UI Logic ──────────────────────────────────────────────────
+
+function updateEngineFields() {
+    if (engineSelect.value === 'groq') {
+        localModelField.style.display = 'none';
+        groqModelField.style.display = 'block';
+    } else {
+        localModelField.style.display = 'block';
+        groqModelField.style.display = 'none';
+    }
+}
+
+engineSelect.addEventListener('change', updateEngineFields);
 
 // ─── Gemini Model Dropdown ────────────────────────────────────
 
 const FALLBACK_MODELS = [
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash — Free (recommended)' },
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite — Free (fastest)' },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro — Free tier limited' },
-    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — Free (fast)' },
-    { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite — Free (fastest)' },
-    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash — Free' },
-    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro — Free tier limited' },
 ];
 
 async function populateGeminiModels(apiKey, selectedModel) {
@@ -78,7 +105,66 @@ async function populateGeminiModels(apiKey, selectedModel) {
     }
 
     geminiModel.innerHTML = '';
-    for (const m of models) {
+
+    const sortedModels = models.map(m => {
+        let label = m.label;
+        let isRecommended = false;
+        const idLower = m.id.toLowerCase();
+
+        // Label models that have a free tier (practically all Flash/Pro/Lite in AI Studio)
+        if (idLower.includes('flash') || idLower.includes('pro') || idLower.includes('lite')) {
+            label += ' — ✨ Free';
+        }
+
+        // Recommend all stable Flash models
+        if (idLower.includes('flash') && !idLower.includes('exp') && !idLower.includes('preview')) {
+            isRecommended = true;
+            label += ' (Recommended)';
+        }
+
+        if (idLower.includes('exp') || idLower.includes('preview')) {
+            label += ' [Exp]';
+        }
+
+        return { ...m, label, isRecommended };
+    }).sort((a, b) => {
+        // Recommended first
+        if (a.isRecommended && !b.isRecommended) return -1;
+        if (!a.isRecommended && b.isRecommended) return 1;
+
+        if (a.isRecommended && b.isRecommended) {
+            const idA = a.id.toLowerCase();
+            const idB = b.id.toLowerCase();
+
+            // 1. Prioritize 2.5 Flash Lite (best free tier capacity)
+            const aIs25Lite = idA.includes('2.5-flash-lite');
+            const bIs25Lite = idB.includes('2.5-flash-lite');
+            if (aIs25Lite && !bIs25Lite) return -1;
+            if (!aIs25Lite && bIs25Lite) return 1;
+
+            // 2. Then regular 2.5 Flash
+            const aIs25Flash = idA.includes('2.5-flash');
+            const bIs25Flash = idB.includes('2.5-flash');
+            if (aIs25Flash && !bIs25Flash) return -1;
+            if (!aIs25Flash && bIs25Flash) return 1;
+
+            // 3. Then "latest" aliases
+            const aIsLatest = idA.includes('latest');
+            const bIsLatest = idB.includes('latest');
+            if (aIsLatest && !bIsLatest) return -1;
+            if (!aIsLatest && bIsLatest) return 1;
+        }
+
+        return a.id.localeCompare(b.id);
+    });
+
+    for (const m of sortedModels) {
+        // Filter out legacy/internal models (typically models with just numbers or weird versions)
+        if (m.id.match(/^gemini-\d+\.\d+/) && !m.id.includes('1.5') && !m.id.includes('2.0')) {
+            // Likely restricted preview models like 2.5-flash, skip them unless they are the currently saved one
+            if (m.id !== selectedModel) continue;
+        }
+
         const opt = document.createElement('option');
         opt.value = m.id;
         opt.textContent = m.label;
@@ -120,6 +206,49 @@ function updateSliderLabel() {
     const minutes = Math.floor(seconds / 60);
     silenceValue.textContent = `${minutes} min`;
 }
+
+// ─── Test Groq API Key ─────────────────────────────────────────
+
+testGroqBtn.addEventListener('click', async () => {
+    const apiKey = groqKey.value.trim();
+    if (!apiKey) {
+        groqTestStatus.textContent = '❌ Please enter an API key first';
+        groqTestStatus.style.color = '#f87171';
+        return;
+    }
+
+    testGroqBtn.disabled = true;
+    testGroqBtn.textContent = '⏳ Testing...';
+    groqTestStatus.textContent = '';
+
+    try {
+        const url = 'https://api.groq.com/openai/v1/models';
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            groqTestStatus.textContent = '✅ Connected to Groq!';
+            groqTestStatus.style.color = '#4ade80';
+        } else {
+            const err = await response.json();
+            const msg = err?.error?.message || `HTTP ${response.status}`;
+            groqTestStatus.textContent = `❌ ${msg}`;
+            groqTestStatus.style.color = '#f87171';
+        }
+    } catch (err) {
+        groqTestStatus.textContent = `❌ Network error: ${err.message}`;
+        groqTestStatus.style.color = '#f87171';
+    } finally {
+        testGroqBtn.disabled = false;
+        testGroqBtn.textContent = '🔌 Test';
+    }
+});
 
 // ─── Test Gemini API Key ───────────────────────────────────────
 
@@ -173,7 +302,9 @@ testGeminiBtn.addEventListener('click', async () => {
 
 saveBtn.addEventListener('click', async () => {
     const settings = {
+        transcriptionEngine: engineSelect.value,
         model: modelSelect.value,
+        groqModel: groqModelSelect.value,
         silenceThreshold: parseInt(silenceSlider.value),
         outputFormat: formatSelect.value,
         outputDir: outputDir.value.trim() || '~/LectureScribe',

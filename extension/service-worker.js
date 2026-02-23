@@ -139,17 +139,7 @@ async function startSession(tabId) {
 
     // 7. Sync current settings to native host BEFORE starting session
     if (settings) {
-      sendNativeMessage({
-        type: 'CONFIGURE',
-        settings: {
-          model: settings.model || 'base',
-          silenceThreshold: settings.silenceThreshold || 600,
-          outputFormat: outputFormat,
-          outputDir: settings.outputDir || '~/LectureScribe',
-          gdriveDir: settings.gdriveDir || '',
-          groqApiKey: settings.groqApiKey || ''
-        }
-      });
+      syncSettingsToNativeHost(settings);
     }
 
     // 8. Tell native host to start a new session
@@ -419,7 +409,9 @@ function syncSettingsToNativeHost(settings) {
   sendNativeMessage({
     type: 'CONFIGURE',
     settings: {
+      transcriptionEngine: settings.transcriptionEngine || 'local',
       model: settings.model || 'base',
+      groqModel: settings.groqModel || 'whisper-large-v3',
       silenceThreshold: settings.silenceThreshold || 600,
       outputFormat: settings.outputFormat || 'timestamped',
       outputDir: settings.outputDir || '~/LectureScribe',

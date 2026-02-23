@@ -13,71 +13,8 @@ logger = logging.getLogger('lecturescribe')
 
 # ─── Default Prompts ────────────────────────────────────────────
 
-DEFAULT_PROMPTS = {
-    'summary': """Analyze this lecture transcript and produce a structured JSON response with exactly these keys:
-{
-  "action_items": ["list of tasks, assignments, or follow-ups mentioned by the instructor"],
-  "key_points": ["5-10 most important takeaways from the lecture"],
-  "topics": [
-    {
-      "topic": "Topic name",
-      "summary": "2-3 sentence summary of what was discussed",
-      "key_terms": ["important terms or concepts within this topic"]
-    }
-  ]
-}
-
-Focus on what students need to know for exams. Be specific and concise.
-Return ONLY valid JSON, no markdown or extra text.""",
-
-    'flashcards': """From this lecture transcript, generate study flashcards.
-Return a JSON object with exactly this structure:
-{
-  "flashcards": [
-    {
-      "question": "Clear, specific question testing a key concept",
-      "answer": "Concise answer (1-3 sentences)",
-      "difficulty": "easy|medium|hard"
-    }
-  ]
-}
-
-Guidelines:
-- Generate 15-25 flashcards
-- Focus on definitions, key concepts, formulas, and important facts
-- Questions should test understanding, not just recall
-- Vary difficulty levels
-- Return ONLY valid JSON, no markdown or extra text.""",
-
-    'quiz': """From this lecture transcript, generate a practice quiz.
-Return a JSON object with exactly this structure:
-{
-  "multiple_choice": [
-    {
-      "question": "Question text",
-      "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
-      "correct_answer": "A",
-      "explanation": "Brief explanation of why this is correct"
-    }
-  ],
-  "short_answer": [
-    {
-      "question": "Question requiring a written response",
-      "sample_answer": "Example of a good answer"
-    }
-  ],
-  "true_false": [
-    {
-      "statement": "A statement about the lecture content",
-      "answer": true,
-      "explanation": "Brief explanation"
-    }
-  ]
-}
-
-Generate 8 multiple choice, 4 short answer, and 5 true/false questions.
-Return ONLY valid JSON, no markdown or extra text."""
-}
+# Default prompts will be loaded from prompts.json
+DEFAULT_PROMPTS = {}
 
 
 class AIGenerator:
@@ -93,8 +30,57 @@ class AIGenerator:
         self.api_key = api_key
         self.model_name = model_name
         self.custom_prompts = custom_prompts or {}
+        self.prompts = self._load_prompts()
         self.model = None
         self._init_client()
+
+    def _load_prompts(self):
+        """Load prompts from ~/.lecturescribe/prompts.json or fallback to defaults."""
+        config_dir = Path.home() / '.lecturescribe'
+        user_prompts_path = config_dir / 'prompts.json'
+        
+        import sys
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            install_dir = Path(sys._MEIPASS)
+        else:
+            install_dir = Path(__file__).parent
+            
+        default_prompts_path = install_dir / 'prompts.json'
+
+        # 1. Try to load from ~/.lecturescribe/prompts.json
+        if user_prompts_path.exists():
+            try:
+                with open(user_prompts_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load user prompts from {user_prompts_path}: {e}")
+
+        # 2. If not found or failed, try to load from installation directory
+        if default_prompts_path.exists():
+            try:
+                with open(default_prompts_path, 'r', encoding='utf-8') as f:
+                    prompts = json.load(f)
+                    
+                    # Also copy to ~/.lecturescribe for user editing if it doesn't exist
+                    if not user_prompts_path.exists():
+                        try:
+                            config_dir.mkdir(parents=True, exist_ok=True)
+                            with open(user_prompts_path, 'w', encoding='utf-8') as f_user:
+                                json.dump(prompts, f_user, indent=2)
+                            logger.info(f"Initialized user prompts at {user_prompts_path}")
+                        except Exception as copy_err:
+                            logger.warning(f"Could not initialize user prompts file: {copy_err}")
+                            
+                    return prompts
+            except Exception as e:
+                logger.error(f"Failed to load default prompts from {default_prompts_path}: {e}")
+
+        # 3. Final fallback (should not happen if installation is correct)
+        return {
+            'summary': "Generate a summary of the transcript.",
+            'flashcards': "Generate flashcards from the transcript.",
+            'quiz': "Generate a quiz from the transcript."
+        }
 
     def _init_client(self):
         """Initialize the Gemini client."""
@@ -112,7 +98,7 @@ class AIGenerator:
 
     def _get_prompt(self, feature):
         """Get the prompt for a feature, with user overrides applied."""
-        base = DEFAULT_PROMPTS.get(feature, '')
+        base = self.prompts.get(feature, '')
         override = self.custom_prompts.get(feature, '')
         if override:
             # User override replaces the default entirely
@@ -136,7 +122,7 @@ class AIGenerator:
 
         results = {}
         for feature in features:
-            if feature not in DEFAULT_PROMPTS:
+            if feature not in self.prompts:
                 logger.warning(f'Unknown feature: {feature}')
                 continue
             try:

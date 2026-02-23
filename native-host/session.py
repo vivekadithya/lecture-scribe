@@ -16,18 +16,22 @@ logger = logging.getLogger('lecturescribe')
 class SessionManager:
     """Manages session lifecycle and file output."""
 
-    def __init__(self, session_id, output_dir='~/LectureScribe', gdrive_dir=None, output_format='timestamped'):
+    def __init__(self, session_id, output_dir='~/LectureScribe', gdrive_dir=None, output_format='timestamped', transcription_engine='local', transcription_model='base'):
         """
         Args:
             session_id: Unique session identifier
             output_dir: Base output directory
             gdrive_dir: Google Drive sync folder (optional)
             output_format: 'timestamped' for [HH:MM:SS] prefix, 'raw' for plain text
+            transcription_engine: 'local' or 'groq'
+            transcription_model: Model name (e.g. 'base', 'whisper-large-v3')
         """
         self.session_id = session_id
         self.output_dir = Path(output_dir).expanduser()
         self.gdrive_dir = Path(gdrive_dir).expanduser() if gdrive_dir else None
         self.output_format = output_format
+        self.transcription_engine = transcription_engine
+        self.transcription_model = transcription_model
 
         self.start_time = datetime.now()
         self.word_count = 0
@@ -52,7 +56,9 @@ class SessionManager:
             f'# Lecture Transcript\n\n'
             f'**Date:** {self.start_time.strftime("%Y-%m-%d")}  \n'
             f'**Started:** {self.start_time.strftime("%H:%M:%S")}  \n'
-            f'**Session ID:** {self.session_id}  \n\n'
+            f'**Session ID:** {self.session_id}  \n'
+            f'**Transcription Engine:** {self.transcription_engine}  \n'
+            f'**Transcription Model:** {self.transcription_model}  \n\n'
             f'---\n\n'
         )
         with open(self.transcript_path, 'w', encoding='utf-8') as f:
@@ -96,6 +102,10 @@ class SessionManager:
             'duration_seconds': int(duration.total_seconds()),
             'word_count': self.word_count,
             'segment_count': self.segment_count,
+            'transcription': {
+                'engine': self.transcription_engine,
+                'model': self.transcription_model
+            },
             'transcript_file': str(self.transcript_path)
         }
 

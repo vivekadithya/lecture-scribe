@@ -44,6 +44,7 @@
             margin-bottom: 24px;
             background: linear-gradient(135deg, var(--accent), var(--accent-hover));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -176,13 +177,29 @@
         <h2>Transcription</h2>
 
         <div class="field">
-            <label for="model-select">Whisper Model</label>
+            <label for="engine-select">Transcription Engine</label>
+            <select id="engine-select">
+                <option value="local">Local (Free, Private, uses Mac CPU)</option>
+                <option value="groq">Groq Cloud (Fastest, requires API Key)</option>
+            </select>
+        </div>
+
+        <div class="field" id="local-model-field">
+            <label for="model-select">Local Whisper Model</label>
             <select id="model-select">
                 <option value="base">Base (faster, ~300MB RAM, good accuracy)</option>
                 <option value="small">Small (slower, ~700MB RAM, great accuracy)</option>
             </select>
-            <p class="help">Smaller model = faster transcription but less accurate. Use Groq re-transcription for
-                important lectures.</p>
+            <p class="help">Smaller model = faster transcription but less accurate.</p>
+        </div>
+
+        <div class="field" id="groq-model-field" style="display: none;">
+            <label for="groq-model-select">Groq Whisper Model</label>
+            <select id="groq-model-select">
+                <option value="whisper-large-v3">Whisper Large V3 (Highest accuracy, ~$0.11/hr)</option>
+                <option value="distil-whisper-large-v3-en">Distil-Whisper (Faster, ~$0.02/hr)</option>
+            </select>
+            <p class="help">Groq transcription requires an API key in the Cloud section below.</p>
         </div>
 
         <div class="field">
@@ -232,9 +249,16 @@
 
         <div class="field">
             <label for="groq-key">Groq API Key</label>
-            <input type="password" id="groq-key" placeholder="gsk_...">
-            <p class="help">For high-quality re-transcription using whisper-large-v3 (~$0.02/hour). Get a key at <a
-                    href="https://console.groq.com" target="_blank" style="color: var(--accent);">console.groq.com</a>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="password" id="groq-key" placeholder="gsk_..." style="flex: 1;">
+                <button id="test-groq-btn" class="btn"
+                    style="padding: 10px 14px; font-size: 12px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;">
+                    🔌 Test
+                </button>
+            </div>
+            <p class="help" id="groq-test-status"></p>
+            <p class="help">Required for Groq Cloud transcription. Get a key at <a href="https://console.groq.com"
+                    target="_blank" style="color: var(--accent);">console.groq.com</a>
             </p>
         </div>
     </div>

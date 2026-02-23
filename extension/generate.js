@@ -173,8 +173,20 @@ async function waitForGeneration() {
 
                 setTimeout(() => {
                     progressSection.classList.add('hidden');
-                    displayResults(message.results);
-                    resultsSection.classList.remove('hidden');
+
+                    // Check if all requested features failed with an error
+                    const hasValidResults = Object.values(message.results).some(res => !res.error);
+
+                    if (!hasValidResults) {
+                        const firstError = Object.values(message.results).find(res => res.error)?.error || 'Generation failed.';
+                        showError('API Error: ' + firstError);
+                    } else {
+                        displayResults(message.results);
+                        resultsSection.classList.remove('hidden');
+
+                        // If some failed but not all, maybe show a toast warning? 
+                        // For now just showing valid ones is fine.
+                    }
                 }, 500);
 
                 chrome.runtime.onMessage.removeListener(listener);
@@ -192,12 +204,25 @@ async function waitForGeneration() {
         chrome.runtime.onMessage.addListener(listener);
 
         // Timeout after 120 seconds
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             clearInterval(progressInterval);
             chrome.runtime.onMessage.removeListener(listener);
             showError('Generation timed out. The transcript may be too long or the API is overloaded.');
             reject(new Error('Timeout'));
         }, 120000);
+
+        // Update listener to clear timeout
+        const originalResolve = resolve;
+        const originalReject = reject;
+
+        const cleanupAndFinish = (fn, ...args) => {
+            clearTimeout(timeoutId);
+            fn(...args);
+        };
+
+        // We override the local references to ensure they clear the timeout
+        resolve = (val) => cleanupAndFinish(originalResolve, val);
+        reject = (err) => cleanupAndFinish(originalReject, err);
     });
 }
 
@@ -505,6 +530,8 @@ async function exportToNotion() {
 
 function showError(message) {
     progressSection.classList.add('hidden');
+    featureSelection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
     errorSection.classList.remove('hidden');
     errorMessage.textContent = message;
 }

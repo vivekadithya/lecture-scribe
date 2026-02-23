@@ -16,6 +16,7 @@ from pathlib import Path
 
 from config import Config
 from transcriber import Transcriber
+from groq_transcriber import GroqTranscriber
 from vad import VoiceActivityDetector
 from session import SessionManager
 
@@ -113,18 +114,29 @@ class NativeMessagingHost:
         self._last_silence_alert_time = 0
 
         # Initialize components
-        self.transcriber = Transcriber(
-            model_name=self.config.model,
-            model_dir=str(self.config.model_dir)
-        )
+        if self.config.transcription_engine == 'groq':
+            self.transcriber = GroqTranscriber(
+                api_key=self.config.groq_api_key,
+                model_name=self.config.groq_model
+            )
+        else:
+            self.transcriber = Transcriber(
+                model_name=self.config.model,
+                model_dir=str(self.config.model_dir)
+            )
         self.vad = VoiceActivityDetector(
             silence_threshold_sec=self.config.silence_threshold
         )
+        engine = self.config.transcription_engine
+        model = self.config.groq_model if engine == 'groq' else self.config.model
+
         self.session_manager = SessionManager(
             session_id=session_id,
             output_dir=str(self.config.output_dir),
             gdrive_dir=self.config.gdrive_dir,
-            output_format=self.config.output_format
+            output_format=self.config.output_format,
+            transcription_engine=engine,
+            transcription_model=model
         )
 
         self.send_message({
@@ -247,6 +259,8 @@ class NativeMessagingHost:
     def handle_configure(self, message):
         """Update configuration settings."""
         settings = message.get('settings', {})
+        if 'transcriptionEngine' in settings:
+            self.config.transcription_engine = settings['transcriptionEngine']
         if 'model' in settings:
             self.config.model = settings['model']
         if 'silenceThreshold' in settings:
@@ -257,6 +271,10 @@ class NativeMessagingHost:
             self.config.output_format = settings['outputFormat']
         if 'gdriveDir' in settings:
             self.config.gdrive_dir = settings['gdriveDir'] or None
+        if 'groqApiKey' in settings:
+            self.config.groq_api_key = settings['groqApiKey']
+        if 'groqModel' in settings:
+            self.config.groq_model = settings['groqModel']
         if 'geminiApiKey' in settings:
             self.config.gemini_api_key = settings['geminiApiKey']
         if 'notionApiKey' in settings:
@@ -282,7 +300,14 @@ class NativeMessagingHost:
         import subprocess
         try:
             result = subprocess.run(
-                ['osascript', '-e', 'POSIX path of (choose folder with prompt "Select output directory")'],
+                [
+                    'osascript',
+                    '-e', 'tell application (path to frontmost application as text)',
+                    '-e', 'activate',
+                    '-e', 'set f to choose folder with prompt "Select output directory"',
+                    '-e', 'POSIX path of f',
+                    '-e', 'end tell'
+                ],
                 capture_output=True, text=True, timeout=120
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -377,18 +402,28 @@ class NativeMessagingHost:
                     except OSError as rename_err:
                         logger.warning(f'Could not rename folder: {rename_err}')
 
-            # Save metadata
-            import json as json_mod
-            metadata = {
+            # Load existing metadata if it exists to preserve transcription info
+            metadata = {}
+            metadata_path = session_dir / 'metadata.json'
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                except Exception:
+                    pass
+
+            metadata.update({
                 'original_session_id': session_id,
                 'lecture_name': lecture_name or session_id,
                 'slug': new_session_id,
                 'recorded_at': session_id,
                 'word_count': len(transcript_text.split()),
-                'features_generated': list(results.keys())
-            }
-            with open(session_dir / 'metadata.json', 'w') as f:
-                json_mod.dump(metadata, f, indent=2)
+                'features_generated': list(results.keys()),
+                'ai_model': generator.model_name
+            })
+
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
 
             logger.info(f'Generation complete for {new_session_id}: {list(results.keys())}')
 

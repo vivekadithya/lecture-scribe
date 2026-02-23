@@ -14,8 +14,21 @@ DIST_DIR="$SCRIPT_DIR/dist"
 
 echo "Building LectureScribe native host binary..."
 
+echo "Setting up build environment..."
+BUILD_VENV="$SCRIPT_DIR/.venv"
+
+if [ ! -d "$BUILD_VENV" ]; then
+    python3 -m venv "$BUILD_VENV"
+fi
+
+source "$BUILD_VENV/bin/activate"
+
+echo "Installing requirements for build..."
+pip install --quiet --upgrade pip
+pip install --quiet -r "$HOST_DIR/requirements.txt"
+
 # Ensure PyInstaller is available
-pip install pyinstaller 2>/dev/null
+pip install --quiet pyinstaller
 
 # Build single-file binary
 pyinstaller \
@@ -25,6 +38,7 @@ pyinstaller \
     --workpath "$SCRIPT_DIR/build" \
     --specpath "$SCRIPT_DIR" \
     --add-data "$HOST_DIR/models:models" \
+    --add-data "$HOST_DIR/prompts.json:." \
     --hidden-import faster_whisper \
     --hidden-import onnxruntime \
     --noupx \

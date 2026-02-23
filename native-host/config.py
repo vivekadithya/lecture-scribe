@@ -11,14 +11,16 @@ from pathlib import Path
 logger = logging.getLogger('lecturescribe')
 
 DEFAULT_CONFIG = {
+    'transcription_engine': 'local',
     'model': 'base',
     'silence_threshold': 600,
     'output_dir': '~/LectureScribe',
     'output_format': 'timestamped',
     'gdrive_dir': None,
     'groq_api_key': '',
+    'groq_model': 'whisper-large-v3',
     'gemini_api_key': '',
-    'gemini_model': 'gemini-2.5-flash',
+    'gemini_model': 'gemini-2.0-flash',
     'notion_api_key': '',
     'notion_page_id': '',
     'default_features': ['summary', 'flashcards', 'quiz'],
@@ -62,6 +64,15 @@ class Config:
                 json.dump(self._data, f, indent=2)
         except IOError as e:
             logger.error(f'Failed to save config: {e}')
+
+    @property
+    def transcription_engine(self):
+        return self._data.get('transcription_engine', DEFAULT_CONFIG['transcription_engine'])
+
+    @transcription_engine.setter
+    def transcription_engine(self, value):
+        if value in ('local', 'groq'):
+            self._data['transcription_engine'] = value
 
     @property
     def model(self):
@@ -109,6 +120,14 @@ class Config:
     @groq_api_key.setter
     def groq_api_key(self, value):
         self._data['groq_api_key'] = value
+
+    @property
+    def groq_model(self):
+        return self._data.get('groq_model', DEFAULT_CONFIG['groq_model'])
+
+    @groq_model.setter
+    def groq_model(self, value):
+        self._data['groq_model'] = value
 
     @property
     def output_format(self):

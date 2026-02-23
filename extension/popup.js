@@ -22,6 +22,7 @@ const setupBanner = document.getElementById('setup-banner');
 const noVideoMsg = document.getElementById('no-video-msg');
 const generateSection = document.getElementById('generate-section');
 const generateBtn = document.getElementById('generate-btn');
+const outputFooter = document.getElementById('output-footer');
 
 let pollInterval = null;
 let durationInterval = null;
@@ -31,6 +32,12 @@ let currentOutputFormat = 'timestamped';
 // ─── Initialization ────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load settings once to show current output dir
+    const { settings } = await chrome.storage.local.get('settings');
+    if (settings?.outputDir) {
+        outputFooter.textContent = `Transcripts saved to ${settings.outputDir}`;
+    }
+
     await refreshState();
 
     // Start polling for updates
